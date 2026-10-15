@@ -1,0 +1,36 @@
+kubeconform:
+  stage: validate
+  image:
+    name: ghcr.io/yannh/kubeconform:v0.7.0
+    entrypoint: [""]
+  script:
+    - kubeconform -strict -summary -ignore-missing-schemas
+      infra/k8s/namespace.yaml
+      infra/k8s/cnpg/cluster.yaml
+      infra/k8s/network/networkpolicy.yaml
+      apps/keycloak/keycloak.yaml
+      apps/keycloak/ingress.yaml
+
+shellcheck:
+  stage: validate
+  image:
+    name: koalaman/shellcheck-alpine:v0.11.0
+    entrypoint: [""]
+  script:
+    - shellcheck scripts/bootstrap.sh scripts/open-admin.sh scripts/postgres-backup.sh scripts/lint.sh
+
+checkov:
+  stage: validate
+  image:
+    name: bridgecrew/checkov:3.2.472
+    entrypoint: [""]
+  script:
+    - checkov
+      -f infra/k8s/namespace.yaml
+      -f infra/k8s/cnpg/cluster.yaml
+      -f infra/k8s/network/networkpolicy.yaml
+      -f apps/keycloak/keycloak.yaml
+      -f apps/keycloak/ingress.yaml
+      --framework kubernetes
+      --compact
+      --quiet

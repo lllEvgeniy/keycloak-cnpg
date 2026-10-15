@@ -1,0 +1,41 @@
+# Probes are not fields of this CR. CloudNativePG renders HTTP liveness
+# and readiness on port 8000 of every instance pod.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-db
+  namespace: keycloak
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie
+  # One synchronous standby: a committed transaction survives the loss of a
+  # single pod. The third instance stays available so a missing standby does
+  # not stop writes. This is the CNPG 1.30 form of minSyncReplicas=1,
+  # maxSyncReplicas=1.
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_connections: "80"
+      shared_buffers: 64MB
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+  enableSuperuserAccess: false
+  storage:
+    size: 2Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: required

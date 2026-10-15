@@ -1,0 +1,33 @@
+# k3d cluster for the Keycloak lab.
+# scripts/bootstrap.sh mounts infra/k8s/cni-calico.yaml into the server
+# auto-deploy directory. The host path is absolute, so it is not stored here.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: keycloak
+servers: 1
+agents: 3
+image: rancher/k3s:v1.35.9-k3s1
+ports:
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+options:
+  k3s:
+    extraArgs:
+      - arg: --flannel-backend=none
+        nodeFilters:
+          - server:*
+      - arg: --disable-network-policy
+        nodeFilters:
+          - server:*
+      - arg: --cluster-cidr=10.42.0.0/16
+        nodeFilters:
+          - server:*
+      - arg: --node-taint=node-role.kubernetes.io/control-plane:NoSchedule
+        nodeFilters:
+          - server:0
+  k3d:
+    wait: true
+    timeout: 600s
+    disableRollback: true

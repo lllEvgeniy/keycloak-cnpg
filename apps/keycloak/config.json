@@ -1,0 +1,85 @@
+{
+  "description": "Описание стенда Keycloak и PostgreSQL. Манифесты остаются источником правды для Kubernetes, этот файл фиксирует версии и решения.",
+  "platform": {
+    "type": "k3d",
+    "kubernetes": "v1.35.9+k3s1",
+    "servers": 1,
+    "agents": 3,
+    "cni": "calico",
+    "cniVersion": "v3.33.0",
+    "cniManifest": "infra/k8s/cni-calico.yaml",
+    "podCidr": "10.42.0.0/16",
+    "ingress": "traefik",
+    "publicPort": 8080
+  },
+  "keycloak": {
+    "version": "26.8.1",
+    "operatorManifest": "https://github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.8.1",
+    "cr": "apps/keycloak/keycloak.yaml",
+    "instances": 3,
+    "publicUrl": "http://auth.127.0.0.1.sslip.io:8080",
+    "adminUrl": "http://127.0.0.1:9090",
+    "databaseSecret": "keycloak-db-app",
+    "bootstrapAdminSecret": "keycloak-bootstrap-admin",
+    "logs": "json stdout via log-console-output",
+    "resources": {
+      "lab": {
+        "requests": {"cpu": "250m", "memory": "768Mi"},
+        "limits": {"cpu": "1", "memory": "1536Mi"}
+      },
+      "production": {
+        "requests": {"cpu": "2", "memory": "1250Mi"},
+        "limits": {"cpu": "6", "memory": "2250Mi"},
+        "source": "Keycloak HA guide for a single cluster"
+      }
+    },
+    "probes": "Keycloak CR задаёт periodSeconds и failureThreshold. HTTP liveness, readiness и startup на порту 9000 рисует оператор."
+  },
+  "adminAccess": {
+    "publicPath": "/admin",
+    "publicResponse": 403,
+    "edge": "apps/keycloak/ingress.yaml",
+    "mechanism": "IngressRoute с priority 100 на PathPrefix /admin и Traefik ipAllowList 192.0.2.1/32 (TEST-NET, совпадений нет).",
+    "adminPath": "scripts/open-admin.sh делает kubectl port-forward 127.0.0.1:9090, это hostname-admin.",
+    "roles": "Пользователь без ролей admin и realm-admin не проходит в консоль. Это второй слой: Admin REST API на публичном hostname режется прокси."
+  },
+  "database": {
+    "operatorChart": "cloudnative-pg 0.29.1",
+    "operatorVersion": "1.30.1",
+    "image": "ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie",
+    "instances": 3,
+    "synchronous": {
+      "method": "any",
+      "number": 1,
+      "dataDurability": "required"
+    },
+    "service": "keycloak-db-rw.keycloak.svc.cluster.local",
+    "appSecret": "keycloak-db-app",
+    "storage": "2Gi local-path",
+    "resources": {
+      "lab": {
+        "requests": {"cpu": "100m", "memory": "256Mi"},
+        "limits": {"cpu": "500m", "memory": "768Mi"}
+      }
+    },
+    "probes": "CloudNativePG ставит HTTP liveness и readiness на порт 8000. В CR Cluster отдельных полей probe нет."
+  },
+  "backup": {
+    "script": "scripts/postgres-backup.sh",
+    "format": "pg_dump -Fc",
+    "target": "status.currentPrimary",
+    "restore": "pg_restore --clean --if-exists --no-owner --role из Secret, только при RESTORE_CONFIRM=yes",
+    "productionAlternative": "Физический backup в object storage через Barman Cloud Plugin. На локальном стенде нет S3, а начиная с CNPG 1.26 встроенный Barman выносится из ядра оператора в плагин."
+  },
+  "secrets": "Пароли не лежат в git. CNPG создаёт keycloak-db-app. scripts/bootstrap.sh один раз создаёт keycloak-bootstrap-admin и печатает пароль. Имя отличается от keycloak-initial-admin: это имя оператор резервирует и пытается создать сам.",
+  "networkPolicy": "infra/k8s/network/networkpolicy.yaml: default-deny ingress в namespace keycloak. HTTP 8080 только от Traefik, Postgres 5432 только от своих подов и Keycloak, порт оператора CNPG 8000 открыт оператору и kubelet.",
+  "decisions": [
+    "Keycloak и PostgreSQL ставятся операторами. CNPG сам выбирает primary и делает failover, Keycloak Operator собирает StatefulSet, Service и пробы. Сторонний Helm-чарт Keycloak и Bitnami не используются.",
+    "Три пода Keycloak и три инстанса Postgres разложены по трём agent-нодам. У Postgres одна синхронная реплика: подтверждённая запись переживает потерю одного пода, а третья реплика не даёт остановить запись, если синхронный standby недоступен.",
+    "Репликация не заменяет бэкап. Логический dump нужен на случай удаления данных. Скрипт ходит только на currentPrimary и читает имя базы из Secret.",
+    "Админка закрыта на входе, а не только ролью. Документация Keycloak прямо говорит, что hostname-admin не запрещает Admin REST API на публичном URL, поэтому /admin на публичном host отвечает 403.",
+    "Calico стоит вместо Flannel: встроенный Flannel k3s не применяет NetworkPolicy. Внутри Docker включён VXLAN, потому что IPIP на bridge k3d теряет пакеты.",
+    "Лабораторные requests и limits меньше production-профиля Keycloak HA. Иначе три Keycloak и три Postgres не стартуют на ноутбуке. Боевые цифры записаны в keycloak.resources.production.",
+    "Terraform, Vault и Prometheus в этот стенд не входят: условие — Kubernetes, CNPG и скрипт бэкапа, а кластер локальный. Секрет живёт в Kubernetes Secret, который создаёт оператор или bootstrap, и в репозиторий не попадает."
+  ]
+}

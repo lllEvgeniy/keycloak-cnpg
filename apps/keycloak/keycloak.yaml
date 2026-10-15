@@ -1,0 +1,81 @@
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  instances: 3
+  ingress:
+    enabled: false
+  http:
+    httpEnabled: true
+  proxy:
+    headers: xforwarded
+  hostname:
+    hostname: http://auth.127.0.0.1.sslip.io:8080
+    admin: http://127.0.0.1:9090
+    strict: true
+  db:
+    vendor: postgres
+    host: keycloak-db-rw.keycloak.svc.cluster.local
+    database: keycloak
+    port: 5432
+    usernameSecret:
+      name: keycloak-db-app
+      key: username
+    passwordSecret:
+      name: keycloak-db-app
+      key: password
+    poolInitialSize: 1
+    poolMinSize: 1
+    poolMaxSize: 5
+  bootstrapAdmin:
+    user:
+      secret: keycloak-bootstrap-admin
+  additionalOptions:
+    - name: log-console-output
+      value: json
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      cpu: "1"
+      memory: 1536Mi
+  readinessProbe:
+    periodSeconds: 10
+    failureThreshold: 3
+  livenessProbe:
+    periodSeconds: 10
+    failureThreshold: 3
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 120
+  serviceMonitor:
+    enabled: false
+  scheduling:
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: keycloak
+            app.kubernetes.io/instance: keycloak
+            app.kubernetes.io/component: server
+  networkPolicy:
+    enabled: true
+    http:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: traefik
+    management:
+      - ipBlock:
+          cidr: 10.0.0.0/8
+      - ipBlock:
+          cidr: 172.16.0.0/12
+      - ipBlock:
+          cidr: 192.168.0.0/16

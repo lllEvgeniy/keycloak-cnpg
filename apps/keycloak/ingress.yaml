@@ -1,0 +1,36 @@
+# 192.0.2.1/32 is TEST-NET (RFC 5737). No real client matches it, so Traefik
+# answers 403 before the request reaches Keycloak. hostname-admin alone does
+# not block the Admin REST API on the public hostname.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: admin-deny
+  namespace: keycloak
+spec:
+  ipAllowList:
+    sourceRange:
+      - 192.0.2.1/32
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`auth.127.0.0.1.sslip.io`) && PathPrefix(`/admin`)
+      kind: Rule
+      priority: 100
+      middlewares:
+        - name: admin-deny
+      services:
+        - name: keycloak-service
+          port: http
+    - match: Host(`auth.127.0.0.1.sslip.io`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: keycloak-service
+          port: http

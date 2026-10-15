@@ -1,0 +1,5 @@
+stages:
+  - validate
+
+include:
+  - local: ci/pr-validation.yaml
