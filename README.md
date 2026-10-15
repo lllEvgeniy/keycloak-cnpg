@@ -1,6 +1,6 @@
 # Keycloak
 
-Локальный кластер k3d с Keycloak и PostgreSQL (CloudNativePG). Описание конфигурации: [apps/keycloak/config.json](apps/keycloak/config.json).
+Локальный кластер k3d с Keycloak и PostgreSQL (CloudNativePG). Что сделано и почему: [SOLUTION.md](SOLUTION.md). Параметры стенда: [apps/keycloak/config.json](apps/keycloak/config.json).
 
 ## Требования
 
